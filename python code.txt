@@ -1,0 +1,44 @@
+import os
+import spidev
+import time
+import thingspeak
+
+spi = spidev.SpiDev() #creates a spiDev object and stores it in the Variable spi
+spi.open(0, 0) #chipselection, CE0 is used
+spi.max_speed_hz = 5000
+channel_id= 1971259
+write_key= '48G1SZ0QMMYEX4NY'
+
+def adc_read(channel):          #reads analog data using spidev interface
+    raw_data = spi.xfer([1, (8 + channel) << 4, 0]) 
+    processed_data = ((raw_data[1] & 3) << 8) + raw_data[2]
+    return processed_data
+
+def adc2voltage(adc_val, precision=2):  # converts adc value into voltage
+    voltage = (adc_val * 3.3) / float(1023)
+    voltage = round(voltage, precision)
+    return voltage
+def vtg2temp(vtg,precision=2):  # converts 1-5v from transmit to temperature 
+    temp = 150*(vtg-1)/4
+    temp=round(temp,precision)
+    return temp
+def measure(channel): #measures value from adc and uploads to thingspeak
+    try:   
+        adc_voltage=adc_read(0)
+        voltage = adc2voltage(adc_voltage)
+        temperature=vtg2temp(voltage)
+
+        if temperature is not None:
+            print(" temperature = {} C,voltage = {}".format(temperature,voltage))
+        else:
+            print('Did not receive any temperature data')
+        response= channel.update({'field1':temperature,'field2':voltage})
+
+    except:
+        print("connection failure")
+
+if __name__ == "__main__": 
+         channel=thingspeak.Channel(id=channel_id,api_key=write_key)
+         while True:
+             measure(channel)
+             time.sleep(15)
